@@ -56,6 +56,7 @@ export default function Home() {
   const [distractions, setDistractions] = useState(0);
   const [missionDone, setMissionDone] = useState(false);
   const spawnedAt = useRef(Date.now());
+  const finishGameRef = useRef<() => void>(() => undefined);
 
   const resetGame = useCallback(() => {
     setSeconds(GAME_SECONDS); setRound(0); setTargetIndex(2); setClicked(false);
@@ -71,13 +72,14 @@ export default function Home() {
     const nextResult = { score: Math.round(accuracy * 0.7 + speedScore * 0.3), accuracy, reaction, correct, wrong, missed };
     setResult(nextResult); localStorage.setItem('focusbridge-last-result', JSON.stringify(nextResult)); setStep('result');
   }, [correct, missed, reactions, wrong]);
+  finishGameRef.current = finishGame;
 
   useEffect(() => {
     if (step !== 'game') return;
-    if (seconds <= 0) { finishGame(); return; }
+    if (seconds <= 0) { finishGameRef.current(); return; }
     const timer = window.setTimeout(() => setSeconds((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
-  }, [finishGame, seconds, step]);
+  }, [seconds, step]);
 
   useEffect(() => {
     if (step !== 'game') return;
