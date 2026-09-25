@@ -46,9 +46,10 @@ function createBoard(difficulty: Difficulty, targetIndex = Math.floor(Math.rando
     const isTarget = index === targetIndex;
     if (difficulty === 'easy') return { isTarget, color: isTarget ? COLORS[0] : COLORS[((index + round) % 3) + 1] };
     if (difficulty === 'medium') return { isTarget, color: isTarget ? COLORS[0] : EXTENDED_COLORS[Math.floor(Math.random() * EXTENDED_COLORS.length)] };
-    const inkColor = isTarget ? COLORS[0] : EXTENDED_COLORS[Math.floor(Math.random() * EXTENDED_COLORS.length)];
-    const choices = isTarget ? COLOR_WORDS.filter((word) => word !== 'YEŞİL') : COLOR_WORDS;
-    return { isTarget, color: inkColor, label: choices[Math.floor(Math.random() * choices.length)] };
+    const inkPalette = [COLORS[0], ...EXTENDED_COLORS];
+    const inkColor = inkPalette[Math.floor(Math.random() * inkPalette.length)];
+    const distractorWords = COLOR_WORDS.filter((word) => word !== 'YEŞİL');
+    return { isTarget, color: inkColor, label: isTarget ? 'YEŞİL' : distractorWords[Math.floor(Math.random() * distractorWords.length)] };
   });
 }
 
@@ -229,13 +230,13 @@ export default function Home() {
             {step === 'ready' && <div className="animate-in flex min-h-[500px] flex-col items-center justify-center text-center">
               {difficulty === 'hard' ? <div className="stroop-demo" style={{ color: '#ff6b54' }}>YEŞİL</div> : <div className="target-demo"><span /></div>}
               <p className="eyebrow mt-8 text-[#c5ff4a]">{selectedDifficulty.title} mod</p>
-              <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">{difficulty === 'hard' ? 'Kelimeyi değil, yazı rengini takip et.' : 'Yalnızca yeşil hedefe dokun.'}</h1>
-              <p className="mt-4 max-w-lg text-base leading-7 text-white/55">{difficulty === 'hard' ? 'Kelimenin anlamı seni yanıltacak. Hangi kelime yazarsa yazsın, yalnızca yeşil renkte görünen yazıya dokun.' : difficulty === 'medium' ? 'Sekiz renk her turda rastgele yer değiştirecek. 30 saniye boyunca doğru yeşili yakala.' : 'Diğer renkler düzenli dağılır. 30 saniye boyunca hem hızını hem doğruluğunu ölçeceğiz.'}</p>
+              <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">{difficulty === 'hard' ? 'Rengi değil, kelimeyi takip et.' : 'Yalnızca yeşil hedefe dokun.'}</h1>
+              <p className="mt-4 max-w-lg text-base leading-7 text-white/55">{difficulty === 'hard' ? 'Yazının rengi seni yanıltacak. Hangi renkte görünürse görünsün, yalnızca “YEŞİL” yazan kelimeye dokun.' : difficulty === 'medium' ? 'Sekiz renk her turda rastgele yer değiştirecek. 30 saniye boyunca doğru yeşili yakala.' : 'Diğer renkler düzenli dağılır. 30 saniye boyunca hem hızını hem doğruluğunu ölçeceğiz.'}</p>
               <Button className="primary-cta mt-8" size="lg" onClick={startGame}>Başlat <Zap /></Button>
             </div>}
 
             {step === 'game' && <div className="animate-in">
-              <div className="mb-5 flex items-end justify-between"><div><p className="eyebrow text-[#c5ff4a]">{selectedDifficulty.title} · {difficulty === 'hard' ? 'Yazı rengini yakala' : 'Yeşili yakala'}</p><h1 className="mt-1 text-3xl font-black tracking-[-0.04em]">Dikkatini hedefte tut.</h1></div><div className="text-right"><span className="block font-mono text-3xl font-bold tabular-nums">00:{String(seconds).padStart(2, '0')}</span><span className="text-sm text-white/45">kalan süre</span></div></div>
+              <div className="mb-5 flex items-end justify-between"><div><p className="eyebrow text-[#c5ff4a]">{selectedDifficulty.title} · {difficulty === 'hard' ? 'YEŞİL kelimesini yakala' : 'Yeşili yakala'}</p><h1 className="mt-1 text-3xl font-black tracking-[-0.04em]">Dikkatini hedefte tut.</h1></div><div className="text-right"><span className="block font-mono text-3xl font-bold tabular-nums">00:{String(seconds).padStart(2, '0')}</span><span className="text-sm text-white/45">kalan süre</span></div></div>
               <Progress value={(seconds / GAME_SECONDS) * 100} className="game-progress mb-6" />
               <div className="tile-grid" aria-label="Dikkat oyunu alanı">
                 {board.map((tile, index) => (
