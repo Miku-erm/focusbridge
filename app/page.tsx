@@ -67,7 +67,6 @@ export default function Home() {
   const [seconds, setSeconds] = useState(GAME_SECONDS);
   const [round, setRound] = useState(0);
   const [board, setBoard] = useState<GameTile[]>(() => createBoard('easy', 2, 0));
-  const [clicked, setClicked] = useState(false);
   const [correct, setCorrect] = useState(0);
   const [wrong, setWrong] = useState(0);
   const [missed, setMissed] = useState(0);
@@ -80,9 +79,10 @@ export default function Home() {
   const [bestScores, setBestScores] = useState<Record<Difficulty, number>>({ easy: 0, medium: 0, hard: 0 });
   const spawnedAt = useRef(Date.now());
   const finishGameRef = useRef<() => void>(() => undefined);
+  const transitionLocked = useRef(false);
 
   const resetGame = useCallback(() => {
-    setSeconds(GAME_SECONDS); setRound(0); setBoard(createBoard(difficulty, 2, 0)); setClicked(false);
+    setSeconds(GAME_SECONDS); setRound(0); setBoard(createBoard(difficulty, 2, 0)); transitionLocked.current = false;
     setCorrect(0); setWrong(0); setMissed(0); setReactions([]); setResult(null);
     spawnedAt.current = Date.now();
   }, [difficulty]);
@@ -114,16 +114,6 @@ export default function Home() {
       try { setBestScores({ easy: 0, medium: 0, hard: 0, ...JSON.parse(saved) }); } catch { /* Bozuk yerel veri oyunu engellemez. */ }
     }
   }, []);
-
-  useEffect(() => {
-    if (step !== 'game') return;
-    const timer = window.setInterval(() => {
-      setClicked((wasClicked) => { if (!wasClicked) setMissed((value) => value + 1); return false; });
-      setRound((value) => { const next = value + 1; setBoard(createBoard(difficulty, undefined, next)); return next; });
-      spawnedAt.current = Date.now();
-    }, 900);
-    return () => window.clearInterval(timer);
-  }, [difficulty, step]);
 
   useEffect(() => {
     if (!missionActive || missionSeconds <= 0) return;
@@ -165,9 +155,13 @@ export default function Home() {
   const SelectedDifficultyIcon = selectedDifficulty.icon;
   const startGame = () => { resetGame(); setStep('game'); };
   const handleTile = (index: number) => {
-    if (clicked) return; setClicked(true);
+    if (transitionLocked.current) return;
+    transitionLocked.current = true;
     if (board[index]?.isTarget) { setCorrect((value) => value + 1); setReactions((values) => [...values, Date.now() - spawnedAt.current]); }
     else setWrong((value) => value + 1);
+    setRound((value) => { const next = value + 1; setBoard(createBoard(difficulty, undefined, next)); return next; });
+    spawnedAt.current = Date.now();
+    window.setTimeout(() => { transitionLocked.current = false; }, 80);
   };
   const restart = () => {
     resetGame(); setStep('goal'); setMissionSeconds(600); setMissionActive(false); setDistractions(0); setMissionDone(false);
@@ -254,7 +248,7 @@ export default function Home() {
                 <div className="score-ring" style={{ '--score': `${result.score * 3.6}deg` } as React.CSSProperties}><div><strong>{result.score}</strong><span>/100</span></div></div>
                 <div><h1 className="text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">{feedback.title}</h1><p className="mt-4 leading-7 text-white/58">{feedback.body}</p></div>
               </div>
-              <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label={`${selectedDifficulty.title} puanı`} value={String(result.points)} /><Metric label="Doğruluk" value={`%${result.accuracy}`} /><Metric label="Tepki" value={`${result.reaction} ms`} /><Metric label="Kaçan" value={String(result.missed)} /></div>
+              <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label={`${selectedDifficulty.title} puanı`} value={String(result.points)} /><Metric label="Doğruluk" value={`%${result.accuracy}`} /><Metric label="Tepki" value={`${result.reaction} ms`} /><Metric label="Yanlış" value={String(result.wrong)} /></div>
               <div className="insight-card mt-6"><Sparkles className="size-5 text-[#c5ff4a]" /><div><strong>Bugünün içgörüsü</strong><p>{result.accuracy >= 80 ? 'Dikkatini doğru hedefe taşıyabiliyorsun. Şimdi bunu 10 dakikalık kesintisiz bir çalışma bloğuna aktar.' : 'Hızı biraz düşürmek hata oranını azaltabilir. Gerçek görevde önce doğruluğa odaklan.'}</p></div></div>
               <Button className="primary-cta mt-7" size="lg" onClick={() => setStep('mission')}>Gerçek hayata taşı <ArrowRight /></Button>
             </div>}
