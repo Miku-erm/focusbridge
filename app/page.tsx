@@ -10,7 +10,8 @@ type Goal = 'study' | 'speed' | 'accuracy';
 type Difficulty = 'easy' | 'medium' | 'hard';
 type GameId = 'focus' | 'memory' | 'speed' | 'direction' | 'order';
 type Direction = 'up' | 'right' | 'down' | 'left';
-type Result = { score: number; points: number; accuracy: number; reaction: number; correct: number; wrong: number };
+type Result = { score: number; points: number; accuracy: number; reaction: number; correct: number; wrong: number; previousBest: number };
+type DevelopmentPlan = { focus: string; evidence: string; nextTarget: string; technique: string; realLife: string; level: string };
 type FocusTile = { color: string; label?: string; isTarget: boolean };
 
 const GAME_SECONDS = 30;
@@ -57,10 +58,45 @@ function createFocusBoard(difficulty: Difficulty, round = 0): FocusTile[] {
 function memoryTargets(difficulty: Difficulty) { const count = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5; return shuffle(Array.from({ length: 16 }, (_, index) => index)).slice(0, count); }
 function orderBoard(difficulty: Difficulty) { const count = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 8 : 9; return shuffle(Array.from({ length: count }, (_, index) => index + 1)); }
 function directionRound(difficulty: Difficulty) { const arrow = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)]; let word = arrow; if (difficulty !== 'easy') { const choices = DIRECTIONS.filter((item) => item !== arrow); word = choices[Math.floor(Math.random() * choices.length)]; } return { arrow, word }; }
-function getFeedback(result: Result) {
-  if (result.accuracy < 70 && result.reaction < 550) return { title: 'Hızın yüksek, kontrolü güçlendirelim.', body: 'Hızlı karar veriyorsun fakat acele etmek hata oranını artırıyor. Bir sonraki turda ilk dürtünü yarım saniye beklet.' };
-  if (result.accuracy >= 85 && result.reaction > 700) return { title: 'Dikkatin güçlü, sıra hızda.', body: 'Doğru ayırt ediyorsun. Aynı doğruluğu korurken tepki süreni biraz kısaltmayı deneyebilirsin.' };
-  return { title: 'Hız ve doğruluk dengende.', body: 'Kararlarını kontrollü ve istikrarlı verdin. Şimdi bu odağı gerçek bir çalışma görevine taşıma zamanı.' };
+const GAME_COACHING: Record<GameId, { accuracy: string; speed: string; technique: string; transfer: string }> = {
+  focus: { accuracy: 'Dikkat filtresini güçlendir', speed: 'Hedef taramasını hızlandır', technique: 'Önce tüm alanı tara, sonra hedefe dokun. İlk gördüğün parlak nesneye refleksle gitme.', transfer: 'Çalışırken yalnızca konuyla ilgili anahtar kelimeleri işaretle; dikkat dağıtan sekmeleri kapat.' },
+  memory: { accuracy: 'Görsel gruplamayı güçlendir', speed: 'Hatırlama yolunu kısalt', technique: 'Kareleri tek tek ezberleme; onları üçgen, çizgi veya köşe gibi tek bir şekle dönüştür.', transfer: 'Bir paragrafı okuduktan sonra kapat ve üç ana fikri konumlarıyla birlikte zihninde canlandır.' },
+  speed: { accuracy: 'Karşılaştırma kontrolünü güçlendir', speed: 'İşlem hızını artır', technique: 'İki sembolün tamamına bakma; önce dış hat, sonra merkez ayrıntısı şeklinde iki aşamalı karşılaştır.', transfer: 'Test çözerken önce soru kökünü ve seçeneklerdeki değişen kelimeyi karşılaştır.' },
+  direction: { accuracy: 'Çeldiriciyi bastırmayı güçlendir', speed: 'Kural değişimine hızlan', technique: 'Kelimeyi içinden okumadan önce okun ucunu bul. Cevabı yalnızca görsel yönden üret.', transfer: 'Ders sırasında bildirim geldiğinde içeriğini okumadan kapat ve kaldığın satıra geri dön.' },
+  order: { accuracy: 'Sıralı planlamayı güçlendir', speed: 'Görsel taramayı hızlandır', technique: 'Ekranı soldan sağa satırlar halinde tara; aradığın sayıyı bulmadan rastgele noktalara atlama.', transfer: 'Büyük bir ödevi başlamadan önce yapılacakları küçükten büyüğe 3–5 adıma sırala.' },
+};
+function getDevelopmentPlan(game: GameId, result: Result): DevelopmentPlan {
+  const copy = GAME_COACHING[game];
+  const lowAccuracy = result.accuracy < 78;
+  const slowReaction = result.reaction > 850;
+  const targetAccuracy = Math.min(98, Math.max(80, result.accuracy + (lowAccuracy ? 10 : 3)));
+  const targetReaction = result.reaction ? Math.max(250, result.reaction - (slowReaction ? 120 : 60)) : 700;
+  const improvement = result.previousBest ? result.points - result.previousBest : 0;
+  const level = result.previousBest === 0 ? 'İlk ölçümün — gelişim çizgin şimdi başlıyor' : improvement > 0 ? `Önceki rekorunun ${improvement} puan üzerindesin` : improvement === 0 ? 'Kişisel rekorunu korudun' : `Rekoruna ulaşmak için ${Math.abs(improvement)} puan kaldı`;
+  if (lowAccuracy) return {
+    focus: copy.accuracy,
+    evidence: `${result.correct} doğruya karşı ${result.wrong} hata yaptın. %${result.accuracy} doğruluk, şu an hızdan önce karar kontrolünün çalışılması gerektiğini gösteriyor.`,
+    nextTarget: `Sonraki turda en az %${targetAccuracy} doğruluk ve en fazla ${Math.max(0, result.wrong - 1)} hata`,
+    technique: copy.technique,
+    realLife: copy.transfer,
+    level,
+  };
+  if (slowReaction) return {
+    focus: copy.speed,
+    evidence: `%${result.accuracy} doğruluğun sağlam; ortalama ${result.reaction} ms tepki süresi kararın doğru ama otomatikleşmeye açık olduğunu gösteriyor.`,
+    nextTarget: `Doğruluğu %${Math.max(80, result.accuracy - 3)} üzerinde tutup tepkiyi ${targetReaction} ms altına indir`,
+    technique: copy.technique,
+    realLife: copy.transfer,
+    level,
+  };
+  return {
+    focus: 'Bir üst zorlukta istikrar kazan',
+    evidence: `%${result.accuracy} doğruluk ve ${result.reaction} ms tepkiyle hız–kontrol dengesini kurdun. Artık amaç bunu daha yoğun çeldiriciler altında korumak.`,
+    nextTarget: `Bir üst modda %${Math.max(82, result.accuracy - 5)} doğruluk ve ${targetReaction} ms tepki`,
+    technique: copy.technique,
+    realLife: copy.transfer,
+    level,
+  };
 }
 function DirectionIcon({ direction, className = '' }: { direction: Direction; className?: string }) { const Icon = direction === 'up' ? ArrowUp : direction === 'right' ? ArrowRight : direction === 'down' ? ArrowDown : ArrowLeft; return <Icon className={className} />; }
 
@@ -80,9 +116,9 @@ export default function Home() {
   const resetGame = useCallback(() => { setSeconds(GAME_SECONDS); setRound(0); setCorrect(0); setWrong(0); setReactions([]); setResult(null); setFocusBoard(createFocusBoard(difficulty)); setDirection(directionRound(difficulty)); setNumbers(orderBoard(difficulty)); setNextNumber(1); if (game === 'memory') revealMemory(difficulty); if (game === 'speed') newSpeedPair(); spawnedAt.current = Date.now(); }, [difficulty, game, newSpeedPair, revealMemory]);
   const finishGame = useCallback(() => {
     const total = correct + wrong; const accuracy = total ? Math.round((correct / total) * 100) : 0; const reaction = reactions.length ? Math.round(reactions.reduce((sum, value) => sum + value, 0) / reactions.length) : 0; const speedScore = reaction ? Math.max(0, Math.min(100, 120 - reaction / 8)) : 0;
-    const values = difficulty === 'easy' ? { correct: 10, wrong: 3 } : difficulty === 'medium' ? { correct: 15, wrong: 5 } : { correct: 20, wrong: 7 }; const points = Math.max(0, correct * values.correct - wrong * values.wrong); const nextResult = { score: Math.round(accuracy * 0.7 + speedScore * 0.3), points, accuracy, reaction, correct, wrong };
+    const values = difficulty === 'easy' ? { correct: 10, wrong: 3 } : difficulty === 'medium' ? { correct: 15, wrong: 5 } : { correct: 20, wrong: 7 }; const points = Math.max(0, correct * values.correct - wrong * values.wrong); const nextResult = { score: Math.round(accuracy * 0.7 + speedScore * 0.3), points, accuracy, reaction, correct, wrong, previousBest: bestScores[game] };
     setResult(nextResult); localStorage.setItem('focusbridge-last-result', JSON.stringify({ ...nextResult, game, difficulty })); setBestScores((current) => { const next = { ...current, [game]: Math.max(current[game], points) }; localStorage.setItem('focusbridge-game-bests', JSON.stringify(next)); return next; }); setStep('result');
-  }, [correct, difficulty, game, reactions, wrong]); finishGameRef.current = finishGame;
+  }, [bestScores, correct, difficulty, game, reactions, wrong]); finishGameRef.current = finishGame;
 
   useEffect(() => { if (step !== 'game') return; if (seconds <= 0) { finishGameRef.current(); return; } const timer = window.setTimeout(() => setSeconds((value) => value - 1), 1000); return () => window.clearTimeout(timer); }, [seconds, step]);
   useEffect(() => { const saved = localStorage.getItem('focusbridge-game-bests'); if (saved) { try { setBestScores((current) => ({ ...current, ...JSON.parse(saved) })); } catch { /* Bozuk yerel veri oyunu engellemez. */ } } return () => { if (memoryTimer.current) window.clearTimeout(memoryTimer.current); }; }, []);
@@ -97,7 +133,7 @@ export default function Home() {
   const handleMemory = (index: number) => { if (memoryReveal || memoryPicked.includes(index)) return; const hit = memoryCells.includes(index); record(hit); if (!hit) { revealMemory(difficulty); return; } const nextPicked = [...memoryPicked, index]; setMemoryPicked(nextPicked); if (nextPicked.length === memoryCells.length) { setRound((value) => value + 1); window.setTimeout(() => revealMemory(difficulty), 180); } };
   const startGame = () => { resetGame(); setStep('game'); };
   const restart = () => { if (memoryTimer.current) window.clearTimeout(memoryTimer.current); setStep('goal'); setMissionSeconds(600); setMissionActive(false); setDistractions(0); setMissionDone(false); };
-  const feedback = useMemo(() => result ? getFeedback(result) : null, [result]);
+  const developmentPlan = useMemo(() => result ? getDevelopmentPlan(game, result) : null, [game, result]);
   const readyCopy: Record<GameId, { title: string; body: string }> = {
     focus: { title: difficulty === 'hard' ? 'Rengi değil, kelimeyi takip et.' : 'Yalnızca yeşil hedefe dokun.', body: 'Her seçimden sonra tahta yenilenir. Doğru hedefi mümkün olduğunca hızlı bul.' },
     memory: { title: 'Parlayan kareleri aklında tut.', body: 'Kareler gizlendikten sonra hatırladığın yerlere dokun. Yanlış seçim yeni turu başlatır.' },
@@ -123,7 +159,13 @@ export default function Home() {
 
         {step === 'game' && <div className="animate-in"><div className="mb-5 flex items-end justify-between gap-4"><div><p className="eyebrow text-[#c5ff4a]">{selectedGame.title} · {selectedDifficulty.title}</p><h1 className="mt-1 text-3xl font-black tracking-[-0.04em]">{selectedGame.skill}</h1></div><div className="text-right"><span className="block font-mono text-3xl font-bold tabular-nums">00:{String(seconds).padStart(2, '0')}</span><span className="text-sm text-white/45">kalan süre</span></div></div><Progress value={(seconds / GAME_SECONDS) * 100} className="game-progress mb-6" /><GameArea game={game} difficulty={difficulty} round={round} focusBoard={focusBoard} onFocus={handleFocus} memoryCells={memoryCells} memoryPicked={memoryPicked} memoryReveal={memoryReveal} onMemory={handleMemory} speedPair={speedPair} onSpeed={handleSpeed} direction={direction} onDirection={handleDirection} numbers={numbers} nextNumber={nextNumber} onNumber={handleNumber} /><div className="mt-5 flex justify-between text-sm text-white/50"><span>Doğru <strong className="text-white">{correct}</strong></span><span>Hata <strong className="text-white">{wrong}</strong></span></div></div>}
 
-        {step === 'result' && result && feedback && <div className="animate-in"><p className="eyebrow text-[#c5ff4a]">{selectedGame.title} tamamlandı</p><div className="mt-5 grid gap-6 sm:grid-cols-[200px_1fr] sm:items-center"><div className="score-ring" style={{ '--score': `${result.score * 3.6}deg` } as React.CSSProperties}><div><strong>{result.score}</strong><span>/100</span></div></div><div><h1 className="text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">{feedback.title}</h1><p className="mt-4 leading-7 text-white/58">{feedback.body}</p></div></div><div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label={`${selectedDifficulty.title} puanı`} value={String(result.points)} /><Metric label="Doğruluk" value={`%${result.accuracy}`} /><Metric label="Tepki" value={`${result.reaction} ms`} /><Metric label="Yanlış" value={String(result.wrong)} /></div><div className="insight-card mt-6"><Sparkles className="size-5 text-[#c5ff4a]" /><div><strong>Bugünün içgörüsü</strong><p>{result.accuracy >= 80 ? `${selectedGame.skill} performansın güçlü. Şimdi bunu 10 dakikalık kesintisiz bir çalışma bloğuna aktar.` : 'Hızı biraz düşürmek hata oranını azaltabilir. Gerçek görevde önce doğruluğa odaklan.'}</p></div></div><div className="mt-7 flex flex-wrap gap-3"><Button variant="outline" size="lg" className="back-button" onClick={() => setStep('games')}>Başka oyun</Button><Button className="primary-cta" size="lg" onClick={() => setStep('mission')}>Gerçek hayata taşı <ArrowRight /></Button></div></div>}
+        {step === 'result' && result && developmentPlan && <div className="animate-in">
+          <div className="result-kicker"><span><Sparkles className="size-4" /> Kişisel gelişim analizi</span><small>{developmentPlan.level}</small></div>
+          <div className="mt-5 grid gap-6 sm:grid-cols-[180px_1fr] sm:items-center"><div className="score-ring" style={{ '--score': `${result.score * 3.6}deg` } as React.CSSProperties}><div><strong>{result.score}</strong><span>/100</span></div></div><div><p className="eyebrow text-[#c5ff4a]">{selectedGame.title} · Koç yorumu</p><h1 className="mt-2 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">{developmentPlan.focus}</h1><p className="mt-3 leading-7 text-white/58">{developmentPlan.evidence}</p></div></div>
+          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label={`${selectedDifficulty.title} puanı`} value={String(result.points)} /><Metric label="Doğruluk" value={`%${result.accuracy}`} /><Metric label="Tepki" value={`${result.reaction} ms`} /><Metric label="Yanlış" value={String(result.wrong)} /></div>
+          <section className="growth-route mt-6"><div className="growth-route-head"><div><span className="eyebrow text-[#c5ff4a]">Sadece skor değil</span><h2>Gelişim rotan</h2></div><span className="route-badge">Sana özel</span></div><div className="growth-grid"><article><span>01</span><div><small>Sonraki hedef</small><strong>{developmentPlan.nextTarget}</strong></div></article><article><span>02</span><div><small>Uygulayacağın teknik</small><strong>{developmentPlan.technique}</strong></div></article><article className="transfer-card"><span>03</span><div><small>Gerçek hayata transfer</small><strong>{developmentPlan.realLife}</strong></div></article></div></section>
+          <div className="mt-7 flex flex-wrap gap-3"><Button variant="outline" size="lg" className="back-button" onClick={() => setStep('games')}>Başka oyun</Button><Button variant="outline" size="lg" className="back-button" onClick={startGame}>Planla tekrar dene <RotateCcw /></Button><Button className="primary-cta" size="lg" onClick={() => setStep('mission')}>Gerçek hayata taşı <ArrowRight /></Button></div>
+        </div>}
 
         {step === 'mission' && <div className="animate-in flex min-h-[510px] flex-col items-center justify-center text-center">{!missionDone ? <><div className={`mission-clock ${missionActive ? 'active' : ''}`}><Clock3 className="size-7" /><strong>{String(Math.floor(missionSeconds / 60)).padStart(2, '0')}:{String(missionSeconds % 60).padStart(2, '0')}</strong></div><p className="eyebrow mt-8 text-[#c5ff4a]">Gerçek hayat görevi</p><h1 className="mt-3 max-w-xl text-4xl font-black tracking-[-0.05em]">10 dakika, tek konu, sıfır bildirim.</h1><p className="mt-4 max-w-lg leading-7 text-white/55">Telefonunu sessize al ve tek bir ders konusuna çalış. Dikkatin dağıldığında aşağıdaki butona dokun.</p>{!missionActive ? <Button className="primary-cta mt-7" size="lg" onClick={() => setMissionActive(true)}>Görevi başlat <TimerReset /></Button> : <div className="mt-7 flex flex-wrap justify-center gap-3"><Button variant="outline" size="lg" className="back-button" onClick={() => setDistractions((value) => value + 1)}>Dikkatim dağıldı · {distractions}</Button><Button className="primary-cta" size="lg" onClick={() => { setMissionDone(true); setMissionActive(false); }}>Tamamladım <Check /></Button></div>}</> : <><div className="success-mark"><Check className="size-10" /></div><p className="eyebrow mt-8 text-[#c5ff4a]">Köprü kuruldu</p><h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">Oyun bitti. Kazanım gerçek hayatta.</h1><p className="mt-4 max-w-lg leading-7 text-white/55">Bu seansta dikkatinin {distractions} kez dağıldığını fark ettin.</p><Button variant="outline" size="lg" className="back-button mt-7" onClick={restart}>Yeniden dene <RotateCcw /></Button></>}</div>}
       </div>
