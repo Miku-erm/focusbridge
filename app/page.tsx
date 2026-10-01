@@ -125,7 +125,11 @@ export default function Home() {
   useEffect(() => { const saved = localStorage.getItem('focusbridge-game-bests'); if (saved) { try { setBestScores((current) => ({ ...current, ...JSON.parse(saved) })); } catch { /* Bozuk yerel veri oyunu engellemez. */ } } return () => { if (memoryTimer.current) window.clearTimeout(memoryTimer.current); }; }, []);
   useEffect(() => { if (!missionActive || missionSeconds <= 0) return; const timer = window.setTimeout(() => setMissionSeconds((value) => value - 1), 1000); return () => window.clearTimeout(timer); }, [missionActive, missionSeconds]);
 
-  const record = (isCorrect: boolean) => { if (isCorrect) { setCorrect((value) => value + 1); setReactions((values) => [...values, Date.now() - spawnedAt.current]); } else setWrong((value) => value + 1); };
+  const record = (isCorrect: boolean) => {
+    const elapsed = Math.max(1, Date.now() - spawnedAt.current);
+    setReactions((values) => [...values, elapsed]);
+    if (isCorrect) setCorrect((value) => value + 1); else setWrong((value) => value + 1);
+  };
   const nextRound = () => { setRound((value) => value + 1); if (game === 'focus') setFocusBoard(createFocusBoard(difficulty, round + 1)); if (game === 'speed') newSpeedPair(); if (game === 'direction') { setDirection(directionRound(difficulty)); spawnedAt.current = Date.now(); } if (game === 'order') { setNumbers(orderBoard(difficulty)); setNextNumber(1); spawnedAt.current = Date.now(); } };
   const handleFocus = (index: number) => { record(Boolean(focusBoard[index]?.isTarget)); nextRound(); spawnedAt.current = Date.now(); };
   const handleSpeed = (answer: boolean) => { record(answer === (speedPair[0] === speedPair[1])); nextRound(); };
@@ -163,7 +167,7 @@ export default function Home() {
         {step === 'result' && result && developmentPlan && <div className="animate-in">
           <div className="result-kicker"><span><Sparkles className="size-4" /> Kişisel gelişim analizi</span><small>{developmentPlan.level}</small></div>
           <div className="mt-5 grid gap-6 sm:grid-cols-[180px_1fr] sm:items-center"><div className="score-ring" style={{ '--score': `${result.score * 3.6}deg` } as React.CSSProperties}><div><strong>{result.score}</strong><span>/100</span></div></div><div><p className="eyebrow text-[#c5ff4a]">{selectedGame.title} · Koç yorumu</p><h1 className="mt-2 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">{developmentPlan.focus}</h1><p className="mt-3 leading-7 text-white/58">{developmentPlan.evidence}</p></div></div>
-          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label={`${selectedDifficulty.title} puanı`} value={String(result.points)} /><Metric label="Doğruluk" value={`%${result.accuracy}`} /><Metric label="Tepki" value={`${result.reaction} ms`} /><Metric label="Yanlış" value={String(result.wrong)} /></div>
+          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label={`${selectedDifficulty.title} puanı`} value={String(result.points)} /><Metric label="Doğruluk" value={`%${result.accuracy}`} /><Metric label="Tepki" value={result.reaction ? `${result.reaction} ms` : '—'} /><Metric label="Yanlış" value={String(result.wrong)} /></div>
           <section className="growth-route mt-6"><div className="growth-route-head"><div><span className="eyebrow text-[#c5ff4a]">Sadece skor değil</span><h2>Gelişim rotan</h2></div><span className="route-badge">Sana özel</span></div><div className="growth-grid"><article><span>01</span><div><small>Sonraki hedef</small><strong>{developmentPlan.nextTarget}</strong></div></article><article><span>02</span><div><small>Uygulayacağın teknik</small><strong>{developmentPlan.technique}</strong></div></article><article className="transfer-card"><span>03</span><div><small>Gerçek hayata transfer</small><strong>{developmentPlan.realLife}</strong></div></article></div></section>
           <div className="mt-7 flex flex-wrap gap-3"><Button variant="outline" size="lg" className="back-button" onClick={() => setStep('games')}>Başka oyun</Button><Button variant="outline" size="lg" className="back-button" onClick={startGame}>Planla tekrar dene <RotateCcw /></Button><Button className="primary-cta" size="lg" onClick={() => setStep('mission')}>Gerçek hayata taşı <ArrowRight /></Button></div>
         </div>}
